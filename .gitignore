@@ -1,0 +1,8 @@
+cert.pem
+key.pem
+
+cpp_server/build/
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/

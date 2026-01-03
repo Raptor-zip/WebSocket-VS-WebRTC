@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket vs WebRTC Ping Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .control-panel {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .results {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .column {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #eee;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .metric {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+
+        #ws-status {
+            color: red;
+        }
+
+        #rtc-status {
+            color: red;
+        }
+
+        .connected {
+            color: green !important;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        /* Visual Feedback */
+        #ws-col,
+        #rtc-col {
+            transition: background-color 0.05s;
+            border-radius: 8px;
+            /* Optional rounded corners */
+        }
+
+        #ws-col.tick {
+            background-color: rgba(75, 192, 192, 0.2);
+            /* WS Cyan tint */
+        }
+
+        #rtc-col.tick {
+            background-color: rgba(255, 99, 132, 0.2);
+            /* RTC Red tint */
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <h1>Protocol Comparison: WS vs WebRTC</h1>
+
+    <div class="control-panel">
+        <button id="btn-start" disabled>Start Comparison</button>
+        <button id="btn-stop" disabled>Stop</button>
+        <label>
+            <input type="checkbox" id="chk-unreliable" checked> Use Unreliable Mode (UDP-like, faster)
+        </label>
+        <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">
+            <label>Packet Size (Padding):
+                <select id="sel-size">
+                    <option value="0">Default (Small)</option>
+                    <option value="1024">1 KB</option>
+                    <option value="10240">10 KB</option>
+                    <option value="51200">50 KB</option>
+                    <option value="102400">100 KB</option>
+                </select>
+            </label>
+            <p>Approx. Packet Size: <span id="lbl-packet-size">...</span> bytes</p>
+        </div>
+        <div style="margin-top: 5px;">
+            <label>Interval (ms): <input type="number" id="inp-interval" value="100" min="10" max="1000" step="10"
+                    style="width: 60px;"></label>
+        </div>
+        <div>
+            <p>WebSocket Status: <span id="ws-status">Disconnected</span></p>
+            <p>WebRTC Status: <span id="rtc-status">Disconnected</span></p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column" id="ws-col">
+            <h2>WebSocket</h2>
+            <div class="metric">RTT (avg): <span id="ws-rtt">0</span> ms</div>
+            <div class="metric">RTT (med): <span id="ws-med">0</span> ms</div>
+            <div class="metric">Sent: <span id="ws-sent">0</span></div>
+            <div class="metric">Received: <span id="ws-recv">0</span></div>
+        </div>
+        <div class="column" id="rtc-col">
+            <h2>WebRTC</h2>
+            <div class="metric">RTT (avg): <span id="rtc-rtt">0</span> ms</div>
+            <div class="metric">RTT (med): <span id="rtc-med">0</span> ms</div>
+            <div class="metric">Sent: <span id="rtc-sent">0</span></div>
+            <div class="metric">Received: <span id="rtc-recv">0</span></div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="rttChart"></canvas>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+
+</html>
