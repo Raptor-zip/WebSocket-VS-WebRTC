@@ -1,48 +1,67 @@
-
 // DOM Elements
 const wsStatus = document.getElementById('ws-status');
 const rtcStatus = document.getElementById('rtc-status');
 const startBtn = document.getElementById('btn-start');
 const stopBtn = document.getElementById('btn-stop');
+
+// WS
 const wsRttEl = document.getElementById('ws-rtt');
-const rtcRttEl = document.getElementById('rtc-rtt');
 const wsSentEl = document.getElementById('ws-sent');
-const rtcSentEl = document.getElementById('rtc-sent');
 const wsRecvEl = document.getElementById('ws-recv');
-const rtcRecvEl = document.getElementById('rtc-recv');
 const wsMedEl = document.getElementById('ws-med');
-const rtcMedEl = document.getElementById('rtc-med');
 const wsCol = document.getElementById('ws-col');
+
+// RTC Unreliable
+const rtcRttEl = document.getElementById('rtc-rtt');
+const rtcSentEl = document.getElementById('rtc-sent');
+const rtcRecvEl = document.getElementById('rtc-recv');
+const rtcMedEl = document.getElementById('rtc-med');
 const rtcCol = document.getElementById('rtc-col');
+
+// RTC Reliable
+const rtcRelRttEl = document.getElementById('rtc-rel-rtt');
+const rtcRelSentEl = document.getElementById('rtc-rel-sent');
+const rtcRelRecvEl = document.getElementById('rtc-rel-recv');
+const rtcRelMedEl = document.getElementById('rtc-rel-med');
+const rtcRelCol = document.getElementById('rtc-rel-col');
+
+// Checkboxes
+const chkWs = document.getElementById('chk-ws');
+const chkRtcUnrel = document.getElementById('chk-rtc-unrel');
+const chkRtcRel = document.getElementById('chk-rtc-rel');
 
 // State
 let ws = null;
 let pc = null;
-let dc = null;
+let dcUnrel = null;
+let dcRel = null;
 let isRunning = false;
 let testInterval = null;
 let pingCounter = 0;
 
-let wsMetrics = { sent: 0, recv: 0, rttHistory: [] };
-let rtcMetrics = { sent: 0, recv: 0, rttHistory: [] };
+let wsMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
+let rtcMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
+let rtcRelMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
 
-// Chart Setup
 // Chart Setup
 const ctx = document.getElementById('rttChart').getContext('2d');
 const chart = new Chart(ctx, {
     type: 'line',
     data: {
         datasets: [{
-            label: 'WebSocket RTT (ms)',
+            label: 'WebSocket (TCP)',
             borderColor: 'rgb(75, 192, 192)',
             data: [],
-            // tension: 0.1, // disable tension for sharp lines
-            spanGaps: false // break line if packet missing
+            spanGaps: false
         }, {
-            label: 'WebRTC RTT (ms)',
+            label: 'WebRTC (UDP/Unreliable)',
             borderColor: 'rgb(255, 99, 132)',
             data: [],
-            // tension: 0.1,
+            spanGaps: false
+        }, {
+            label: 'WebRTC (UDP/Reliable)',
+            borderColor: 'rgb(153, 102, 255)',
+            data: [],
             spanGaps: false
         }]
     },
@@ -87,48 +106,41 @@ function connectWS() {
     };
 }
 
-const requestUnreliable = document.getElementById('chk-unreliable');
-
-requestUnreliable.onchange = () => {
-    if (pc) {
-        pc.close();
-        if (dc) dc.close();
-        rtcStatus.textContent = 'Reconnecting...';
-        rtcStatus.classList.remove('connected');
-        connectWebRTC();
-    }
-};
-
 // WebRTC Setup
 async function connectWebRTC() {
     pc = new RTCPeerConnection();
 
-    // Create Data Channel with options based on checkbox
-    const options = requestUnreliable.checked ? {
+    // 1. Unreliable Channel (Ordered=false, Retransmits=0)
+    dcUnrel = pc.createDataChannel('ping-pong-unrel', {
         ordered: false,
-        maxRetransmits: 0 // UDP-like behavior: drop if lost, don't wait
-    } : {};
+        maxRetransmits: 0
+    });
 
-    console.log("Creating Data Channel with options:", options);
-    dc = pc.createDataChannel('ping-pong', options);
+    // 2. Reliable Channel (Ordered=true, Default)
+    dcRel = pc.createDataChannel('ping-pong-rel', {
+        ordered: true
+    });
 
-    dc.onopen = () => {
-        rtcStatus.textContent = 'Connected';
-        rtcStatus.classList.add('connected');
-        checkReady();
+    const setupDC = (dc, label) => {
+        dc.onopen = () => {
+            checkReady();
+        };
+        dc.onclose = () => {
+            rtcStatus.textContent = 'Disconnected';
+            rtcStatus.classList.remove('connected');
+        };
+        dc.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'pong') {
+                // Determine proto based on label
+                const proto = (label === 'unrel') ? 'rtc' : 'rtc-rel';
+                handlePong(proto, msg);
+            }
+        };
     };
 
-    dc.onclose = () => {
-        rtcStatus.textContent = 'Disconnected';
-        rtcStatus.classList.remove('connected');
-    };
-
-    dc.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'pong') {
-            handlePong('rtc', msg);
-        }
-    };
+    setupDC(dcUnrel, 'unrel');
+    setupDC(dcRel, 'rel');
 
     // Negotiate
     const offer = await pc.createOffer();
@@ -148,17 +160,26 @@ async function connectWebRTC() {
 }
 
 function checkReady() {
-    if (ws && ws.readyState === WebSocket.OPEN &&
-        dc && dc.readyState === 'open') {
+    const wsReady = ws && ws.readyState === WebSocket.OPEN;
+    const rtcReady = dcUnrel && dcUnrel.readyState === 'open' &&
+        dcRel && dcRel.readyState === 'open';
+
+    if (wsReady) {
+        wsStatus.classList.add('connected');
+    }
+
+    if (rtcReady) {
+        rtcStatus.textContent = 'Connected (2 Channels)';
+        rtcStatus.classList.add('connected');
+    }
+
+    if (wsReady && rtcReady) {
         startBtn.disabled = false;
     }
 }
 
 
-
 const MAX_SAMPLES = 100; // Rolling window size
-
-// ... (omitted)
 
 // function updateStats (Helper)
 function updateStats(elAvg, elMed, arr) {
@@ -176,25 +197,25 @@ function updateStats(elAvg, elMed, arr) {
     elMed.textContent = med.toFixed(2);
 }
 
-// Update stats every 10 seconds
+// Update stats every 3 seconds
 setInterval(() => {
     if (!isRunning) return;
     const now = Date.now();
-    const windowStart = now - 10000;
+    const windowStart = now - 3000;
 
-    [wsMetrics, rtcMetrics].forEach((m, i) => {
-        // Filter old data
-        // Optimization: rttHistory is sorted by time. Find index?
-        // Simple filter is fine for N < 1000.
+    [wsMetrics, rtcMetrics, rtcRelMetrics].forEach((m, i) => {
         m.rttHistory = m.rttHistory.filter(item => item.t > windowStart);
 
         const values = m.rttHistory.map(item => item.v);
-        const elAvg = i === 0 ? wsRttEl : rtcRttEl;
-        const elMed = i === 0 ? wsMedEl : rtcMedEl;
+
+        let elAvg, elMed;
+        if (i === 0) { elAvg = wsRttEl; elMed = wsMedEl; }
+        else if (i === 1) { elAvg = rtcRttEl; elMed = rtcMedEl; }
+        else { elAvg = rtcRelRttEl; elMed = rtcRelMedEl; }
 
         updateStats(elAvg, elMed, values);
     });
-}, 1000);
+}, 3000);
 
 function handlePong(proto, msg) {
     const now = Date.now();
@@ -209,11 +230,16 @@ function handlePong(proto, msg) {
         elRecv = wsRecvEl;
         elCol = wsCol;
         datasetIndex = 0;
-    } else {
+    } else if (proto === 'rtc') { // Unreliable
         metrics = rtcMetrics;
         elRecv = rtcRecvEl;
         elCol = rtcCol;
         datasetIndex = 1;
+    } else { // reliable
+        metrics = rtcRelMetrics;
+        elRecv = rtcRelRecvEl;
+        elCol = rtcRelCol;
+        datasetIndex = 2;
     }
 
     metrics.recv++;
@@ -266,11 +292,12 @@ startBtn.onclick = () => {
     // Initial chartData init
     wsMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
     rtcMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
+    rtcRelMetrics = { sent: 0, recv: 0, rttHistory: [], chartData: [] };
 
     // Clear Chart
-    // chart.data.labels = []; // Not used in linear scale
     chart.data.datasets[0].data = [];
     chart.data.datasets[1].data = [];
+    chart.data.datasets[2].data = [];
     chart.options.scales.x.min = 0;
     chart.options.scales.x.max = MAX_SAMPLES;
     chart.update();
@@ -296,20 +323,31 @@ startBtn.onclick = () => {
         lblPacketSize.textContent = msg.length;
 
         // Send WS
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN && chkWs.checked) {
             ws.send(msg);
             wsMetrics.sent++;
             wsSentEl.textContent = wsMetrics.sent;
         }
 
-        // Send WebRTC
-        if (dc && dc.readyState === 'open') {
+        // Send WebRTC Unreliable
+        if (dcUnrel && dcUnrel.readyState === 'open' && chkRtcUnrel.checked) {
             try {
-                dc.send(msg);
+                dcUnrel.send(msg);
                 rtcMetrics.sent++;
                 rtcSentEl.textContent = rtcMetrics.sent;
             } catch (e) {
-                console.warn("RTC Send Error (might be too large/buffer full):", e);
+                // Buffer full?
+            }
+        }
+
+        // Send WebRTC Reliable
+        if (dcRel && dcRel.readyState === 'open' && chkRtcRel.checked) {
+            try {
+                dcRel.send(msg);
+                rtcRelMetrics.sent++;
+                rtcRelSentEl.textContent = rtcRelMetrics.sent;
+            } catch (e) {
+                // Buffer full?
             }
         }
 
@@ -327,3 +365,26 @@ stopBtn.onclick = () => {
 // Initialize
 connectWS();
 connectWebRTC();
+
+// Persistence
+function loadState() {
+    const sWs = localStorage.getItem('chk-ws');
+    const sUnrel = localStorage.getItem('chk-rtc-unrel');
+    const sRel = localStorage.getItem('chk-rtc-rel');
+
+    if (sWs !== null) chkWs.checked = (sWs === 'true');
+    if (sUnrel !== null) chkRtcUnrel.checked = (sUnrel === 'true');
+    if (sRel !== null) chkRtcRel.checked = (sRel === 'true');
+}
+
+function saveState() {
+    localStorage.setItem('chk-ws', chkWs.checked);
+    localStorage.setItem('chk-rtc-unrel', chkRtcUnrel.checked);
+    localStorage.setItem('chk-rtc-rel', chkRtcRel.checked);
+}
+
+[chkWs, chkRtcUnrel, chkRtcRel].forEach(cb => {
+    cb.addEventListener('change', saveState);
+});
+
+loadState();

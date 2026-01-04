@@ -73,21 +73,25 @@
 
         /* Visual Feedback */
         #ws-col,
-        #rtc-col {
+        #rtc-col,
+        #rtc-rel-col {
             transition: background-color 0.05s;
             border-radius: 8px;
-            /* Optional rounded corners */
         }
 
         #ws-col.tick {
             background-color: rgba(75, 192, 192, 0.2);
-            /* WS Cyan tint */
         }
 
         #rtc-col.tick {
             background-color: rgba(255, 99, 132, 0.2);
-            /* RTC Red tint */
         }
+
+        #rtc-rel-col.tick {
+            background-color: rgba(153, 102, 255, 0.2);
+        }
+
+        /* Purple for Reliable */
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -98,9 +102,13 @@
     <div class="control-panel">
         <button id="btn-start" disabled>Start Comparison</button>
         <button id="btn-stop" disabled>Stop</button>
-        <label>
-            <input type="checkbox" id="chk-unreliable" checked> Use Unreliable Mode (UDP-like, faster)
-        </label>
+        <!-- Unreliable mode is now always enabled alongside Reliable -->
+        <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">
+            <label style="margin-right: 15px;"><input type="checkbox" id="chk-ws" checked> Enable WebSocket</label>
+            <label style="margin-right: 15px;"><input type="checkbox" id="chk-rtc-unrel" checked> Enable RTC
+                (Unreliable)</label>
+            <label><input type="checkbox" id="chk-rtc-rel" checked> Enable RTC (Reliable)</label>
+        </div>
         <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;">
             <label>Packet Size (Padding):
                 <select id="sel-size">
@@ -123,7 +131,7 @@
         </div>
     </div>
 
-    <div class="row">
+    <div class="results">
         <div class="column" id="ws-col">
             <h2>WebSocket</h2>
             <div class="metric">RTT (avg): <span id="ws-rtt">0</span> ms</div>
@@ -132,11 +140,18 @@
             <div class="metric">Received: <span id="ws-recv">0</span></div>
         </div>
         <div class="column" id="rtc-col">
-            <h2>WebRTC</h2>
+            <h2>WebRTC (Unreliable)</h2>
             <div class="metric">RTT (avg): <span id="rtc-rtt">0</span> ms</div>
             <div class="metric">RTT (med): <span id="rtc-med">0</span> ms</div>
             <div class="metric">Sent: <span id="rtc-sent">0</span></div>
             <div class="metric">Received: <span id="rtc-recv">0</span></div>
+        </div>
+        <div class="column" id="rtc-rel-col">
+            <h2>WebRTC (Reliable)</h2>
+            <div class="metric">RTT (avg): <span id="rtc-rel-rtt">0</span> ms</div>
+            <div class="metric">RTT (med): <span id="rtc-rel-med">0</span> ms</div>
+            <div class="metric">Sent: <span id="rtc-rel-sent">0</span></div>
+            <div class="metric">Received: <span id="rtc-rel-recv">0</span></div>
         </div>
     </div>
 
